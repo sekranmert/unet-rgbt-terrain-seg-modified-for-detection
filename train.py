@@ -340,7 +340,7 @@ def train_pairunet(model, train_loader, val_loader, optimizer, scheduler, criter
 def run(args):
     
     wandb.login()
-    wandb.init(project="Test", config=args, name=f"{args.exp_name}")
+    wandb.init(project=f"{args.project}", config=args, name=f"{args.exp_name}")
 
     # Set seed for reproducibility
     set_seed(args.seed)
@@ -410,6 +410,7 @@ if __name__ == "__main__":
     parser.add_argument('--exp_name', type=str, default="Run1", help='Experiment name')
     parser.add_argument('--train_type',  type=str, default="rgb", help='rgb, ir or rgbir')
     parser.add_argument('--device',  type=str, default="cuda", help='Device')
+    parser.add_argument('--project',  type=str, default="Test1", help='Project name')
     parser.add_argument('--seed',  type=int, default=42, help='Seed number')
     parser.add_argument('--patience',  type=int, default=15, help='Early stop patience')
 
