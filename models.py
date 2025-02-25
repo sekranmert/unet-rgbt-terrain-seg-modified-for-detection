@@ -121,7 +121,7 @@ class FuseConv(nn.Module):
         super(FuseConv, self).__init__()
 
         self.fuse_conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=1),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=3, padding=1),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
         )
