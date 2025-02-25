@@ -1,0 +1,6 @@
+__pycache__/
+best_ir/
+best_rgb/
+checkpoints/
+temp/
+wandb/
