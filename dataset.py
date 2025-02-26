@@ -63,6 +63,77 @@ class CaltechDataset(Dataset):
             raise ValueError("Mismatch between number of images and masks.")
 
         return np.column_stack((image_files, mask_files))
+    
+class CaltechRgbtDataset(Dataset):
+
+    def __init__(self, images_root_dir, masks_dir, scale = 1.0):
+        super().__init__()
+
+        self.images_root_dir = images_root_dir
+        self.masks_dir = masks_dir
+        self.scale = scale
+
+        self.dataset = self._load_dataset()
+
+    def __len__(self):
+        return self.dataset.shape[0]
+
+    def __getitem__(self, index):
+        
+        image_rgb_file = self.dataset[index, 0]
+        image_ir_file = self.dataset[index, 1]
+        mask_file = self.dataset[index, 2]
+
+        image_rgb = cv2.cvtColor(cv2.imread(image_rgb_file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+        image_ir = cv2.cvtColor(cv2.imread(image_ir_file, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+        mask = cv2.imread(mask_file, cv2.IMREAD_COLOR)
+
+        image_rgb = self._preprocess(image_rgb, False)
+        image_ir = self._preprocess(image_ir, False)
+        mask = self._preprocess(mask, True)
+
+        
+        # Add a new axis to the grayscale image to match dimensions
+        image = np.concatenate((image_rgb, image_ir[:, :, 0, np.newaxis]), axis=2)
+
+        image = torch.from_numpy(image).permute(2, 0, 1).to(dtype=torch.float32)
+        mask = torch.from_numpy(mask).to(dtype=torch.int64)
+
+        return image, mask
+    
+        
+    
+    def _preprocess(self, image, is_mask=False):
+        
+        new_width = int(image.shape[1] * self.scale)
+        new_height = int(image.shape[0] * self.scale)
+
+        if is_mask:
+            image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_NEAREST)
+            image = image[:, :, 0].astype(np.int64)
+        else:
+            image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+            image = image / 255.0
+
+        return image
+
+        
+
+    def _load_dataset(self):
+        
+        image_rgb_files = glob.glob(self.images_root_dir + "/" + "color" + "/" + "*.png")
+        image_ir_files = glob.glob(self.images_root_dir + "/" + "thermal8" + "/" + "*.png")
+        mask_files = glob.glob(self.masks_dir + "/" + "*.png")
+
+        image_rgb_files = sorted(image_rgb_files)
+        image_ir_files = sorted(image_ir_files)
+        mask_files = sorted(mask_files)
+
+        if len(image_rgb_files) != len(mask_files) or len(image_ir_files) != len(mask_files) :
+            raise ValueError("Mismatch between number of images and masks.")
+
+        return np.column_stack((image_rgb_files, image_ir_files, mask_files))
+    
 
 class CaltechPairDataset(Dataset):
 

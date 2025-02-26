@@ -93,6 +93,20 @@ def load_dataset(args):
                                   "C:/dev/python/custom_unet/data/split_8/test/annotations",
                                   args.scale)
     
+    elif args.train_type == "rgbcatir":
+        
+        train_set = CaltechRgbtDataset("C:/dev/python/custom_unet/data/split_8/train",
+                                   "C:/dev/python/custom_unet/data/split_8/train/annotations",
+                                   args.scale)
+        
+        val_set = CaltechRgbtDataset("C:/dev/python/custom_unet/data/split_8/val",
+                                 "C:/dev/python/custom_unet/data/split_8/val/annotations",
+                                 args.scale)
+        
+        test_set = CaltechRgbtDataset("C:/dev/python/custom_unet/data/split_8/test",
+                                  "C:/dev/python/custom_unet/data/split_8/test/annotations",
+                                  args.scale)
+    
     else:
 
         train_set = CaltechPairDataset("C:/dev/python/custom_unet/data/split_8/train/color",
@@ -133,10 +147,10 @@ def hist_weights_and_gradients(model):
 
 def load_model(args):
 
-    if args.train_type == "rgb" or args.train_type == "ir":
-        return UNet(n_channels=3, n_classes=args.n_classes)
+    if args.train_type == "rgbir":
+        return PairUNet(rgb_channels=args.in_ch_1, ir_channels=args.in_ch_2, n_classes=args.n_classes)     
     else:
-        return PairUNet(rgb_channels=3, ir_channels=3, n_classes=args.n_classes)
+        return UNet(n_channels=args.in_ch_1, n_classes=args.n_classes)
 
 def train_unet(model, train_loader, val_loader, optimizer, scheduler, criterion, args):
 
@@ -350,9 +364,9 @@ def run(args):
     train_set, val_set, test_set = load_dataset(args)
     model = load_model(args)
 
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=1, generator=g)
-    val_loader   = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=1, generator=g)
-    test_loader  = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=1, generator=g)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=False, num_workers=2, generator=g)
+    val_loader   = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=2, generator=g)
+    test_loader  = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=2, generator=g)
     
     optimizer = optim.AdamW(model.parameters(),lr=args.learning_rate, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5)
@@ -370,18 +384,19 @@ def run(args):
         start_epoch = load_model_for_training(args.from_pth, model, optimizer, scheduler) + 1
         print(f"Resuming training from epoch {start_epoch}")
 
-    if args.train_type == "rgb" or args.train_type == "ir":
-        train_unet(model, train_loader, val_loader, optimizer, scheduler, criterion, args)
-
-        # Test phase
-        test_loss, dice_score, miou_score, wiou_score, iou_per_class, dice_per_class = test_unet(model, test_loader, criterion, args.device, settings.dataset_weights)
-        
-    else:
+    if args.train_type == "rgbir":
         train_pairunet(model, train_loader, val_loader, optimizer, scheduler, criterion, args)
 
         # Test phase
         test_loss, dice_score, miou_score, wiou_score, iou_per_class, dice_per_class = test_pairunet(model, test_loader, criterion, args.device, settings.dataset_weights)
+        
+    else:
+        train_unet(model, train_loader, val_loader, optimizer, scheduler, criterion, args)
+
+        # Test phase
+        test_loss, dice_score, miou_score, wiou_score, iou_per_class, dice_per_class = test_unet(model, test_loader, criterion, args.device, settings.dataset_weights)
     
+
     print("☑️ test_dice_per_class :", list(dice_per_class.squeeze(0).cpu().numpy()))
     print("☑️ test_iou_per_class :", list(iou_per_class.squeeze(0).cpu().numpy()))
 
@@ -408,11 +423,13 @@ if __name__ == "__main__":
     parser.add_argument('--scale', type=float, default=0.5, help='Downscaling factor of the images')
     parser.add_argument('--n_classes', type=int, default=12, help='Number of classes')
     parser.add_argument('--exp_name', type=str, default="Run1", help='Experiment name')
-    parser.add_argument('--train_type',  type=str, default="rgb", help='rgb, ir or rgbir')
+    parser.add_argument('--train_type',  type=str, default="rgb", help='rgb, ir, rgbcatir or rgbir')
     parser.add_argument('--device',  type=str, default="cuda", help='Device')
     parser.add_argument('--project',  type=str, default="Test1", help='Project name')
     parser.add_argument('--seed',  type=int, default=42, help='Seed number')
-    parser.add_argument('--patience',  type=int, default=15, help='Early stop patience')
+    parser.add_argument('--patience',  type=int, default=30, help='Early stop patience')
+    parser.add_argument('--in_ch_1',  type=int, default=3, help='Input channel size (ex. rgbcatir = 4)')
+    parser.add_argument('--in_ch_2',  type=int, default=3, help='Input channel size')
 
     args = parser.parse_args()
     run(args)
