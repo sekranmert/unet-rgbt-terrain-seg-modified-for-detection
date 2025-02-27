@@ -364,9 +364,9 @@ def run(args):
     train_set, val_set, test_set = load_dataset(args)
     model = load_model(args)
 
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=False, num_workers=2, generator=g)
-    val_loader   = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=2, generator=g)
-    test_loader  = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=2, generator=g)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=1, generator=g)
+    val_loader   = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=1, generator=g)
+    test_loader  = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=1, generator=g)
     
     optimizer = optim.AdamW(model.parameters(),lr=args.learning_rate, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5)
