@@ -84,7 +84,7 @@ class BottleneckFuseCat(nn.Module):
         super().__init__()
 
         self.conv_block = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_ch, out_ch, kernel_size=5, stride=1, padding=2),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
         )
@@ -121,7 +121,7 @@ class FuseConv(nn.Module):
         super(FuseConv, self).__init__()
 
         self.fuse_conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_ch, out_ch, kernel_size=5, stride=1, padding=2),
             nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
         )
@@ -258,10 +258,10 @@ if __name__ == "__main__":
     print(x2.shape)
     print(y_pred_one_hot.shape)
 
-    img = one_hot_to_mask(y_pred_one_hot).numpy().astype(np.float32)
+    # img = one_hot_to_mask(y_pred_one_hot).numpy().astype(np.float32)
 
-    img = cv2.normalize(
-    img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+    # img = cv2.normalize(
+    # img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
 
-    cv2.imshow("Image", img)
-    cv2.waitKey(0)
+    # cv2.imshow("Image", img)
+    # cv2.waitKey(0)
