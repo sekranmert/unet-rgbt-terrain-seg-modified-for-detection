@@ -69,7 +69,7 @@ def load_dataset(args):
 
         train_set = CaltechDataset("C:/dev/python/custom_unet/data/split_8/train/color",
                                    "C:/dev/python/custom_unet/data/split_8/train/annotations",
-                                   args.scale)
+                                   args.scale, transform=settings.transform if args.aug else None)
         
         val_set = CaltechDataset("C:/dev/python/custom_unet/data/split_8/val/color",
                                  "C:/dev/python/custom_unet/data/split_8/val/annotations",
@@ -83,7 +83,7 @@ def load_dataset(args):
         
         train_set = CaltechDataset("C:/dev/python/custom_unet/data/split_8/train/thermal8",
                                    "C:/dev/python/custom_unet/data/split_8/train/annotations",
-                                   args.scale)
+                                   args.scale, transform=settings.transform if args.aug else None)
         
         val_set = CaltechDataset("C:/dev/python/custom_unet/data/split_8/val/thermal8",
                                  "C:/dev/python/custom_unet/data/split_8/val/annotations",
@@ -112,7 +112,7 @@ def load_dataset(args):
         train_set = CaltechPairDataset("C:/dev/python/custom_unet/data/split_8/train/color",
                                        "C:/dev/python/custom_unet/data/split_8/train/thermal8",
                                        "C:/dev/python/custom_unet/data/split_8/train/annotations",
-                                       args.scale)
+                                       args.scale, transform=settings.transform if args.aug else None)
         
         val_set = CaltechPairDataset("C:/dev/python/custom_unet/data/split_8/val/color",
                                      "C:/dev/python/custom_unet/data/split_8/val/thermal8",
@@ -364,9 +364,9 @@ def run(args):
     train_set, val_set, test_set = load_dataset(args)
     model = load_model(args)
 
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=1, generator=g)
-    val_loader   = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=1, generator=g)
-    test_loader  = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=1, generator=g)
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=1, generator=g, worker_init_fn=seed_worker)
+    val_loader   = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=1, generator=g, worker_init_fn=seed_worker)
+    test_loader  = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=1, generator=g, worker_init_fn=seed_worker)
     
     optimizer = optim.AdamW(model.parameters(),lr=args.learning_rate, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5)
@@ -430,6 +430,7 @@ if __name__ == "__main__":
     parser.add_argument('--patience',  type=int, default=30, help='Early stop patience')
     parser.add_argument('--in_ch_1',  type=int, default=3, help='Input channel size (ex. rgbcatir = 4)')
     parser.add_argument('--in_ch_2',  type=int, default=3, help='Input channel size')
+    parser.add_argument('--aug', action='store_true', help='Enable training augumentation')
 
     args = parser.parse_args()
     run(args)
