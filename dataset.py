@@ -3,16 +3,18 @@ import torch
 import numpy as np
 import glob
 import cv2
+import settings
 
 
 class CaltechDataset(Dataset):
 
-    def __init__(self, images_dir, masks_dir, scale = 1.0):
+    def __init__(self, images_dir, masks_dir, scale = 1.0, transform=None):
         super().__init__()
 
         self.images_dir = images_dir
         self.masks_dir = masks_dir
         self.scale = scale
+        self.transform = transform
 
         self.dataset = self._load_dataset()
 
@@ -29,9 +31,14 @@ class CaltechDataset(Dataset):
 
         image = self._preprocess(image, False)
         mask = self._preprocess(mask, True)
-
-        image = torch.from_numpy(image).permute(2, 0, 1).to(dtype=torch.float32)
-        mask = torch.from_numpy(mask).to(dtype=torch.int64)
+        
+        if self.transform is None:
+            image = torch.from_numpy(image).permute(2, 0, 1).to(dtype=torch.float32)
+            mask = torch.from_numpy(mask).to(dtype=torch.int64)
+        else:
+            aug = self.transform(image=image, mask=mask)
+            image = torch.from_numpy(aug["image"]).permute(2, 0, 1).to(dtype=torch.float32)
+            mask = torch.from_numpy(aug["mask"]).to(dtype=torch.int64)
 
         return image, mask
     
@@ -45,7 +52,7 @@ class CaltechDataset(Dataset):
             image = image[:, :, 0].astype(np.int64)
         else:
             image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-            image = image / 255.0
+            image = (image / 255.0).astype(np.float32)
 
         return image
 
@@ -113,7 +120,7 @@ class CaltechRgbtDataset(Dataset):
             image = image[:, :, 0].astype(np.int64)
         else:
             image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-            image = image / 255.0
+            image = (image / 255.0).astype(np.float32)
 
         return image
 
@@ -137,14 +144,15 @@ class CaltechRgbtDataset(Dataset):
 
 class CaltechPairDataset(Dataset):
 
-    def __init__(self, images_rgb_dir, images_ir_dir, masks_dir, scale = 1.0):
+    def __init__(self, images_rgb_dir, images_ir_dir, masks_dir, scale = 1.0, transform=None):
         super().__init__()
 
         self.images_rgb_dir = images_rgb_dir
         self.images_ir_dir = images_ir_dir
         self.masks_dir = masks_dir
         self.scale = scale
-
+        self.transform = transform
+        
         self.dataset = self._load_dataset()
 
     
@@ -165,9 +173,15 @@ class CaltechPairDataset(Dataset):
         image_ir = self._preprocess(image_ir, False)
         mask = self._preprocess(mask, True)
 
-        image_rgb = torch.from_numpy(image_rgb).permute(2, 0, 1).to(dtype=torch.float32)
-        image_ir = torch.from_numpy(image_ir).permute(2, 0, 1).to(dtype=torch.float32)
-        mask = torch.from_numpy(mask).to(dtype=torch.int64)
+        if self.transform is None:
+            image_rgb = torch.from_numpy(image_rgb).permute(2, 0, 1).to(dtype=torch.float32)
+            image_ir = torch.from_numpy(image_ir).permute(2, 0, 1).to(dtype=torch.float32)
+            mask = torch.from_numpy(mask).to(dtype=torch.int64)
+        else:
+            aug = self.transform(image=image_rgb, image_extra=image_ir, mask=mask)
+            image_rgb = torch.from_numpy(aug["image"]).permute(2, 0, 1).to(dtype=torch.float32)
+            image_ir = torch.from_numpy(aug["image_extra"]).permute(2, 0, 1).to(dtype=torch.float32)
+            mask = torch.from_numpy(aug["mask"]).to(dtype=torch.int64)
 
         return image_rgb, image_ir, mask
     
@@ -181,7 +195,7 @@ class CaltechPairDataset(Dataset):
             image = image[:, :, 0].astype(np.int64)
         else:
             image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-            image = image / 255.0
+            image = (image / 255.0).astype(np.float32)
 
         return image
 
@@ -205,6 +219,10 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from torch.utils.data import DataLoader
 
+    import random
+    np.random.seed(42)
+    random.seed(42)
+
     # Define paths to your data directories
     images_dir = "C:/dev/python/custom_unet/data/split_8/test/color"
     masks_dir = "C:/dev/python/custom_unet/data/split_8/test/annotations"
@@ -212,8 +230,8 @@ if __name__ == "__main__":
     images_ir_dir = "C:/dev/python/custom_unet/data/split_8/test/thermal8"
 
     # Create instances of the datasets
-    caltech_dataset = CaltechDataset(images_dir, masks_dir, scale=0.5)
-    caltech_pair_dataset = CaltechPairDataset(images_rgb_dir, images_ir_dir, masks_dir, scale=0.5)
+    caltech_dataset = CaltechDataset(images_dir, masks_dir, scale=0.5, transform=settings.transform)
+    caltech_pair_dataset = CaltechPairDataset(images_rgb_dir, images_ir_dir, masks_dir, scale=0.5, transform=settings.transform)
 
     # Test CaltechDataset
     print("Testing CaltechDataset:")
