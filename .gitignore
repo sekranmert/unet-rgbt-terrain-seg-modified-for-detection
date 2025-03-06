@@ -4,3 +4,6 @@ best_rgb/
 checkpoints/
 temp/
 wandb/
+inferance.py
+notebooks/
+output/
