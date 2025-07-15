@@ -10,7 +10,7 @@ import torch.nn as nn
 import os
 import numpy as np
 
-from dataset import AntiUAVDetectionDataset
+from dataset import AntiUAVDetectionDataset, YoloSplitDetectionDataset, YoloSplitPairDetectionDataset
 from metrics import detection_loss, calculate_map
 from models import PairUNetWithDetection, UNetWithDetection
 from utils import *
@@ -56,35 +56,81 @@ def load_detection_dataset(args):
     """
     # Convert img_size to tuple
     target_size = tuple(args.img_size)
-    
-    # Create datasets
-    train_set = AntiUAVDetectionDataset(
-        dataset_root=args.dataset_root,
-        split='train',
-        scale=args.scale,
-        transform=settings.transform if args.aug else None,
-        max_objects=args.max_objects,
-        target_size=target_size
-    )
-    
-    val_set = AntiUAVDetectionDataset(
-        dataset_root=args.dataset_root,
-        split='val',
-        scale=args.scale,
-        transform=None,  # No augmentation for validation
-        max_objects=args.max_objects,
-        target_size=target_size
-    )
-    
-    test_set = AntiUAVDetectionDataset(
-        dataset_root=args.dataset_root,
-        split='test',
-        scale=args.scale,
-        transform=None,  # No augmentation for testing
-        max_objects=args.max_objects,
-        target_size=target_size
-    )
-    
+    if getattr(args, 'dataset_type', 'antiuav') == 'yolo_split':
+        root = getattr(args, 'yolo_split_root', 'datasets/Anti-UAV-SDO-YOLO-Split')
+        if args.modality == 'both':
+            train_set = YoloSplitPairDetectionDataset(
+                root=root,
+                split='train',
+                max_objects=args.max_objects,
+                target_size=target_size,
+                transform=settings.transform if args.aug else None
+            )
+            val_set = YoloSplitPairDetectionDataset(
+                root=root,
+                split='val',
+                max_objects=args.max_objects,
+                target_size=target_size,
+                transform=None
+            )
+            test_set = YoloSplitPairDetectionDataset(
+                root=root,
+                split='test',
+                max_objects=args.max_objects,
+                target_size=target_size,
+                transform=None
+            )
+        else:
+            train_set = YoloSplitDetectionDataset(
+                root=root,
+                split='train',
+                modality=args.modality,
+                max_objects=args.max_objects,
+                target_size=target_size,
+                transform=settings.transform if args.aug else None
+            )
+            val_set = YoloSplitDetectionDataset(
+                root=root,
+                split='val',
+                modality=args.modality,
+                max_objects=args.max_objects,
+                target_size=target_size,
+                transform=None
+            )
+            test_set = YoloSplitDetectionDataset(
+                root=root,
+                split='test',
+                modality=args.modality,
+                max_objects=args.max_objects,
+                target_size=target_size,
+                transform=None
+            )
+    else:
+        # Use original AntiUAVDetectionDataset
+        train_set = AntiUAVDetectionDataset(
+            dataset_root=args.dataset_root,
+            split='train',
+            scale=args.scale,
+            transform=settings.transform if args.aug else None,
+            max_objects=args.max_objects,
+            target_size=target_size
+        )
+        val_set = AntiUAVDetectionDataset(
+            dataset_root=args.dataset_root,
+            split='val',
+            scale=args.scale,
+            transform=None,  # No augmentation for validation
+            max_objects=args.max_objects,
+            target_size=target_size
+        )
+        test_set = AntiUAVDetectionDataset(
+            dataset_root=args.dataset_root,
+            split='test',
+            scale=args.scale,
+            transform=None,  # No augmentation for testing
+            max_objects=args.max_objects,
+            target_size=target_size
+        )
     return train_set, val_set, test_set
 
 def hist_weights_and_gradients(model):
@@ -92,7 +138,14 @@ def hist_weights_and_gradients(model):
 
 def load_detection_model(args):
     """Load the appropriate detection model based on input type."""
-    if args.train_type == "rgbir":
+    if getattr(args, 'modality', 'visible') == 'both':
+        return PairUNetWithDetection(
+            rgb_channels=args.in_ch_1,
+            ir_channels=args.in_ch_2,
+            n_classes=args.n_classes,
+            max_objects=args.max_objects
+        )
+    elif args.train_type == "rgbir":
         return PairUNetWithDetection(
             rgb_channels=args.in_ch_1, 
             ir_channels=args.in_ch_2, 
@@ -409,12 +462,18 @@ if __name__ == "__main__":
     
     # Dataset parameters
     parser.add_argument('--dataset_root', type=str, default='datasets/Anti-UAV-RGBT', 
-                       help='Path to Anti-UAV-RGBT dataset')
+                       help='Path to Anti-UAV-RGBT dataset (for antiuav dataset_type)')
+    parser.add_argument('--yolo_split_root', type=str, default='datasets/Anti-UAV-SDO-YOLO-Split',
+                       help='Path to YOLO-format split dataset (for yolo_split dataset_type)')
     parser.add_argument('--max_objects', type=int, default=10, 
                        help='Maximum number of objects per image')
     parser.add_argument('--img_size', type=int, nargs=2, default=[640, 640], 
                        metavar=('WIDTH', 'HEIGHT'),
                        help='Target image size (width height) for resizing')
+    parser.add_argument('--dataset_type', type=str, default='antiuav', choices=['antiuav', 'yolo_split'],
+                       help='Dataset type: antiuav (default) or yolo_split (for YOLO-format split dataset)')
+    parser.add_argument('--modality', type=str, default='visible', choices=['visible', 'infrared', 'both'],
+                       help='Modality for yolo_split dataset: visible, infrared, or both (for paired training)')
     
     # Model parameters
     parser.add_argument('--train_type', type=str, default='rgbir', 

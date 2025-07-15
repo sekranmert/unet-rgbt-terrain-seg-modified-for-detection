@@ -370,6 +370,153 @@ class AntiUAVDetectionDataset(Dataset):
         return dataset
 
 
+class YoloSplitDetectionDataset(Dataset):
+    """
+    Dataset for YOLO-format split datasets (e.g., Anti-UAV-SDO-YOLO-Split).
+    Loads images and YOLO-format labels for single-class detection.
+    Supports both visible and infrared modalities.
+    """
+    def __init__(self, root, split='train', modality='visible', max_objects=10, target_size=(640, 640), transform=None):
+        super().__init__()
+        self.root = root
+        self.split = split
+        self.modality = modality  # 'visible' or 'infrared'
+        self.max_objects = max_objects
+        self.target_size = target_size
+        self.transform = transform
+
+        self.img_dir = os.path.join(root, modality, 'images', split)
+        self.lbl_dir = os.path.join(root, modality, 'labels', split)
+        self.samples = self._gather_samples()
+
+    def _gather_samples(self):
+        img_files = sorted([f for f in os.listdir(self.img_dir) if f.endswith('.jpg') or f.endswith('.png')])
+        samples = []
+        for img_name in img_files:
+            img_path = os.path.join(self.img_dir, img_name)
+            lbl_path = os.path.join(self.lbl_dir, os.path.splitext(img_name)[0] + '.txt')
+            if not os.path.exists(lbl_path):
+                continue
+            with open(lbl_path, 'r') as f:
+                lines = [line.strip() for line in f if line.strip()]
+            if not lines:
+                continue  # skip images with no objects
+            samples.append((img_path, lbl_path))
+        return samples
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img_path, lbl_path = self.samples[idx]
+        # Load image
+        image = cv2.cvtColor(cv2.imread(img_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+        orig_h, orig_w = image.shape[:2]
+        # Resize
+        image = cv2.resize(image, self.target_size, interpolation=cv2.INTER_LINEAR)
+        image = (image / 255.0).astype(np.float32)
+        # Load labels
+        bboxes = []
+        with open(lbl_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) != 5:
+                    continue
+                class_id, x, y, w, h = map(float, parts)
+                # Only use class 0
+                bboxes.append([x, y, w, h])
+        # Pad/truncate
+        bbox_tensor = np.zeros((self.max_objects, 4), dtype=np.float32)
+        objectness = np.zeros((self.max_objects,), dtype=np.float32)
+        n = min(len(bboxes), self.max_objects)
+        if n > 0:
+            bbox_tensor[:n, :] = np.array(bboxes[:n])
+            objectness[:n] = 1.0
+        # Transform
+        if self.transform is not None:
+            aug = self.transform(image=image)
+            image = aug['image']
+        image_tensor = torch.from_numpy(image).permute(2, 0, 1).to(dtype=torch.float32)
+        bbox_tensor = torch.tensor(bbox_tensor, dtype=torch.float32)
+        objectness_tensor = torch.tensor(objectness, dtype=torch.float32)
+        return image_tensor, bbox_tensor, objectness_tensor
+
+
+class YoloSplitPairDetectionDataset(Dataset):
+    """
+    Dataset for paired visible and infrared images from YOLO-format split datasets.
+    Loads visible and infrared images with the same filename and their shared YOLO label.
+    Returns (visible_tensor, infrared_tensor, bbox_tensor, objectness_tensor).
+    """
+    def __init__(self, root, split='train', max_objects=10, target_size=(640, 640), transform=None):
+        super().__init__()
+        self.root = root
+        self.split = split
+        self.max_objects = max_objects
+        self.target_size = target_size
+        self.transform = transform
+        self.vis_img_dir = os.path.join(root, 'visible', 'images', split)
+        self.ir_img_dir = os.path.join(root, 'infrared', 'images', split)
+        self.lbl_dir = os.path.join(root, 'visible', 'labels', split)  # labels are the same for both
+        self.samples = self._gather_samples()
+
+    def _gather_samples(self):
+        img_files = sorted([f for f in os.listdir(self.vis_img_dir) if f.endswith('.jpg') or f.endswith('.png')])
+        samples = []
+        for img_name in img_files:
+            vis_path = os.path.join(self.vis_img_dir, img_name)
+            ir_path = os.path.join(self.ir_img_dir, img_name)
+            lbl_path = os.path.join(self.lbl_dir, os.path.splitext(img_name)[0] + '.txt')
+            if not (os.path.exists(vis_path) and os.path.exists(ir_path) and os.path.exists(lbl_path)):
+                continue
+            with open(lbl_path, 'r') as f:
+                lines = [line.strip() for line in f if line.strip()]
+            if not lines:
+                continue  # skip images with no objects
+            samples.append((vis_path, ir_path, lbl_path))
+        return samples
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        vis_path, ir_path, lbl_path = self.samples[idx]
+        # Load images
+        vis_img = cv2.cvtColor(cv2.imread(vis_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+        ir_img = cv2.cvtColor(cv2.imread(ir_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
+        # Resize
+        vis_img = cv2.resize(vis_img, self.target_size, interpolation=cv2.INTER_LINEAR)
+        ir_img = cv2.resize(ir_img, self.target_size, interpolation=cv2.INTER_LINEAR)
+        vis_img = (vis_img / 255.0).astype(np.float32)
+        ir_img = (ir_img / 255.0).astype(np.float32)
+        # Load labels
+        bboxes = []
+        with open(lbl_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) != 5:
+                    continue
+                class_id, x, y, w, h = map(float, parts)
+                bboxes.append([x, y, w, h])
+        # Pad/truncate
+        bbox_tensor = np.zeros((self.max_objects, 4), dtype=np.float32)
+        objectness = np.zeros((self.max_objects,), dtype=np.float32)
+        n = min(len(bboxes), self.max_objects)
+        if n > 0:
+            bbox_tensor[:n, :] = np.array(bboxes[:n])
+            objectness[:n] = 1.0
+        # Transform (apply to both images)
+        if self.transform is not None:
+            aug = self.transform(image=vis_img, image_extra=ir_img)
+            vis_img = aug['image']
+            ir_img = aug['image_extra']
+        vis_tensor = torch.from_numpy(vis_img).permute(2, 0, 1).to(dtype=torch.float32)
+        ir_tensor = torch.from_numpy(ir_img).permute(2, 0, 1).to(dtype=torch.float32)
+        bbox_tensor = torch.tensor(bbox_tensor, dtype=torch.float32)
+        objectness_tensor = torch.tensor(objectness, dtype=torch.float32)
+        return vis_tensor, ir_tensor, bbox_tensor, objectness_tensor
+
+
 if __name__ == "__main__":
 
     import matplotlib.pyplot as plt

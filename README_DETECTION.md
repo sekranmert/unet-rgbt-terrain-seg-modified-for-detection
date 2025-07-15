@@ -24,36 +24,20 @@ The code expects the Anti-UAV-RGBT dataset in the following structure:
 
 ```
 datasets/Anti-UAV-RGBT/
-├── train/
-│   ├── sequence_1/
-│   │   ├── visible/
+├── visible/
+│   ├── images/
+│   │   ├── train/
 │   │   │   ├── 000001.jpg
 │   │   │   ├── 000002.jpg
 │   │   │   └── ...
-│   │   └── infrared/
-│   │       ├── 000001.jpg
-│   │       ├── 000002.jpg
-│   │       ├── infrared.json
+│   │   └── val/
+│   │       ├── 000003.jpg
+│   │       ├── 000004.jpg
 │   │       └── ...
-│   └── sequence_2/
+│   └── labels/
 │       └── ...
-├── val/
-│   └── ...
-└── test/
+└── infrared/
     └── ...
-```
-
-### JSON Annotation Format
-Each sequence folder contains an `infrared.json` file with:
-```json
-{
-  "exist": [1, 1, 0, 1, ...],  // Object existence per frame
-  "gt_rect": [
-    [x, y, w, h],  // Bounding box for frame 0
-    [x, y, w, h],  // Bounding box for frame 1
-    ...
-  ]
-}
 ```
 
 ## 🚀 Quick Start
@@ -98,41 +82,11 @@ python train_detection.py \
 
 #### Test on Dataset Samples
 ```bash
-python inference_detection.py \
-    --checkpoint checkpoints_detection/RGBT_Detection_best_detection_epoch_X.pth \
-    --model_type rgbir \
-    --test_on_dataset \
-    --img_size 640 640 \
-    --confidence_threshold 0.5
+python unet-rgbt-terrain-seg-modified-for-detection/train_detection.py   
+--dataset_type yolo_split   --yolo_split_root datasets/Anti-UAV-SDO-YOLO-Split   
+--modality both   --epochs 100   --batch_size 4  --img_size 320 320 
+--exp_name anti-uav-trial-1
 ```
-
-#### Single Image Inference
-```bash
-python inference_detection.py \
-    --checkpoint checkpoints_detection/RGBT_Detection_best_detection_epoch_X.pth \
-    --model_type rgbir \
-    --rgb_image path/to/rgb_image.jpg \
-    --ir_image path/to/ir_image.jpg \
-    --img_size 640 640 \
-    --confidence_threshold 0.5
-```
-
-## 📊 Model Architecture
-
-### Detection Head
-The detection head is attached to the bottleneck of the U-Net:
-
-```
-Input Image(s) → U-Net Encoder → Bottleneck Features → Detection Head
-                                    ↓
-                              Segmentation Decoder
-```
-
-### Detection Head Components
-1. **Global Average Pooling**: Reduces spatial dimensions to feature vector
-2. **Feature Extractor**: MLP layers for feature processing
-3. **BBox Regression Head**: Predicts [x, y, w, h] coordinates
-4. **Objectness Head**: Predicts object existence probability
 
 ## 🎛️ Training Parameters
 
@@ -225,7 +179,7 @@ unet-rgbt-terrain-seg-modified-for-detection/
 
 1. **CUDA Out of Memory**
    - Reduce batch size: `--batch_size 4`
-   - Reduce image scale: `--scale 0.25`
+   - Reset image size : `--img_size 320 320`
 
 2. **Dataset Loading Errors**
    - Check dataset structure matches expected format
@@ -256,10 +210,5 @@ unet-rgbt-terrain-seg-modified-for-detection/
 - Anti-UAV-RGBT Dataset: [Anti-UAV: A Large Multi-Modal Benchmark for UAV Tracking](https://arxiv.org/abs/2101.08466)
 - Detection Loss Functions: Based on common object detection practices
 
-## 🤝 Contributing
-
-Feel free to submit issues and enhancement requests!
-
-## 📄 License
-
-This project is based on the original U-Net implementation and modified for detection tasks. 
+made by @dgkngzlr
+improved by @sekranmert
